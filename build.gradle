@@ -1,0 +1,24 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.intellij' version '0.4.1'
+}
+
+group 'com.wkl.idea.pulgin'
+version '0.1'
+
+intellij {
+    version '2018.3.3'
+}
+patchPluginXml {
+    changeNotes """
+      An Android Studio Plugin to generate java file from json"""
+}
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+//    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
