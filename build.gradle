@@ -1,13 +1,23 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+}
+
 plugins {
     id 'java'
     id 'org.jetbrains.intellij' version '0.4.1'
 }
+apply plugin: 'idea'
+apply plugin: 'org.jetbrains.intellij'
+apply plugin: 'java'
 
 group 'com.wkl.idea.pulgin'
 version '0.1'
 
 intellij {
-    version '2018.3.3'
+//    version '2018.3.3'
+    localPath '/Applications/IntelliJ IDEA CE.app'
 }
 patchPluginXml {
     changeNotes """
@@ -21,4 +31,9 @@ repositories {
 
 dependencies {
 //    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+publishPlugin {
+    username intellijPublishUsername
+    password intellijPublishPassword
 }
