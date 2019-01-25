@@ -79,6 +79,13 @@ public class JsonDialog extends DialogWrapper implements ItemListener {
         // 获取一个 对应的 文本编辑器
         mEditor = (TextEditor) mTextEditorProvider.createEditor(mProject, mJsonVirtualFile);
         mRealEditor = mEditor.getEditor();
+
+        // 增加初始 json 结构，防止报错
+        WriteCommandAction.runWriteCommandAction(project,
+                () -> mRealEditor.getDocument().insertString(0, "{}"));
+        // 选中文本
+        mRealEditor.getSelectionModel().setSelection(0, mRealEditor.getDocument().getTextLength());
+
         MarkupModelEx model = (MarkupModelEx) DocumentMarkupModel
                 .forDocument(mRealEditor.getDocument(), project, true);
         model.addMarkupModelListener(() -> {
@@ -207,7 +214,7 @@ public class JsonDialog extends DialogWrapper implements ItemListener {
 
     @Nullable
     @Override
-    protected JComponent createNorthPanel() { // 上放 的控件
+    protected JComponent createNorthPanel() { // 上方 的控件
         GridLayoutManager layoutManager = new GridLayoutManager(2, 3);
         Insets margin = JBUI.insetsBottom(5);
         layoutManager.setMargin(margin);

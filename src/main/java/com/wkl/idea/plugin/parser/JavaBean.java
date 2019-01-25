@@ -51,7 +51,7 @@ class JavaBean {
             return mClazz;
         }
 
-        StringBuilder builder = new StringBuilder();
+        StringBuilder builder = new StringBuilder("\n");
         StringBuilder getterSetter = new StringBuilder();
         for (ClassLine line : mLines) {
             if (line.isComment()) { // 注释
@@ -91,7 +91,9 @@ class JavaBean {
             }
         }
 
-        builder.append("\n").append(getterSetter);
+        if (mGetterSetter) {
+            builder.append("\n").append(getterSetter);
+        }
 
         // 生成类
         PsiClass psiClass = psiElementFactory.createClassFromText(builder.toString(), null);
