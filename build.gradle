@@ -18,10 +18,12 @@ version '0.1'
 intellij {
 //    version '2018.3.3'
     localPath '/Applications/IntelliJ IDEA CE.app'
+    updateSinceUntilBuild false
 }
+
 patchPluginXml {
     changeNotes """
-      An Android Studio Plugin to generate java file from json"""
+      First version"""
 }
 sourceCompatibility = 1.8
 

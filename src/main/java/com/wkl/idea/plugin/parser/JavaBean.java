@@ -4,9 +4,11 @@ import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.*;
+import com.intellij.psi.codeStyle.JavaCodeStyleManager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Created by <a href="mailto:wangkunlin1992@gmail.com">Wang kunlin</a>
@@ -17,21 +19,25 @@ class JavaBean {
     private PsiDirectory fileDirectory;
     private final PsiElementFactory psiElementFactory;
     private final String name;
-    final String originName;
-    private List<ClassLine> mLines = new ArrayList<>();
+    private List<ClassLine> mLines = new ArrayList<>(); // field or comment
     private List<ClassField> mFields = new ArrayList<>();
-    private PsiType mClazz;
+    private PsiType mClazz; // 已经生成的类
 
-    JavaBean(Project project, PsiDirectory fileDirectory, PsiElementFactory psiElementFactory, String originName, String name) {
+    private JavaCodeStyleManager styleManager;
+    private boolean mGetterSetter;
+
+    JavaBean(Project project, PsiDirectory fileDirectory, PsiElementFactory psiElementFactory,
+             String name, boolean getterSetter) {
         this.project = project;
         this.fileDirectory = fileDirectory;
         this.name = name;
-        this.originName = originName;
         this.psiElementFactory = psiElementFactory;
+        styleManager = JavaCodeStyleManager.getInstance(project);
+        mGetterSetter = getterSetter;
     }
 
-    void addField(PsiType type, String name, String value) {
-        ClassField field = ClassField.newField(type, name, value);
+    void addField(PsiType type, String name, String value, boolean array) {
+        ClassField field = ClassField.newField(type, name, value, array);
         mLines.add(field);
         mFields.add(field);
     }
@@ -44,28 +50,89 @@ class JavaBean {
         if (mClazz != null) {
             return mClazz;
         }
-        PsiClass psiClass = psiElementFactory.createClass(name);
-        WriteCommandAction.runWriteCommandAction(project, () -> {
-            PsiElementFactory factory = psiElementFactory;
-            for (ClassLine line : mLines) {
-                if (line.isComment()) {
-                    ClassComment comment = (ClassComment) line;
-                    psiClass.add(factory.createCommentFromText(comment.comment, null));
+
+        StringBuilder builder = new StringBuilder();
+        StringBuilder getterSetter = new StringBuilder();
+        for (ClassLine line : mLines) {
+            if (line.isComment()) { // 注释
+                ClassComment comment = (ClassComment) line;
+                builder.append("    ").append(comment.comment).append("\n");
+            } else { // 属性
+                ClassField field = (ClassField) line;
+
+                if (mGetterSetter) { // 生成 getter  setter
+                    builder.append("    private ");
                 } else {
-                    ClassField field = (ClassField) line;
-                    PsiField psiField = factory.createField(field.name, field.type);
-                    psiClass.add(psiField);
-                    if (!StringUtil.isEmpty(field.value)) {
-                        PsiElement comment = factory.createCommentFromText("// " + field.value, null);
-                        psiField.add(comment);
+                    builder.append("    public ");
+                }
+                String type;
+                if (field.array) { // 数组
+                    if (field.type instanceof PsiPrimitiveType) {
+                        String boxName = ((PsiPrimitiveType) field.type).getBoxedTypeName();
+                        type = "java.util.List<" + boxName + ">";
+                        builder.append(type);
+                    } else {
+                        String typeName = field.type.getPresentableText();
+                        type = "java.util.List<" + typeName + ">";
+                        builder.append(type);
                     }
+                } else { // 对象
+                    type = field.type.getPresentableText();
+                    builder.append(type);
+                }
+                builder.append(" ").append(field.name).append(";").append("\n");
+
+                appendGetterSetter(getterSetter, field.name, type);
+
+                if (!StringUtil.isEmpty(field.value)) { // 值不为null, 添加注释
+                    builder.deleteCharAt(builder.length() - 1);
+                    builder.append(" // ").append(field.value).append("\n");
                 }
             }
+        }
 
-            fileDirectory.add(psiClass);
-        });
+        builder.append("\n").append(getterSetter);
+
+        // 生成类
+        PsiClass psiClass = psiElementFactory.createClassFromText(builder.toString(), null);
+        psiClass.setName(name); // 设置类名字
+        // 设置 类 为 public
+        Objects.requireNonNull(psiClass.getModifierList()).setModifierProperty(PsiModifier.PUBLIC, true);
+
+        WriteCommandAction.runWriteCommandAction(project, new MyWriteAction(psiClass));
         mClazz = psiElementFactory.createType(psiClass);
         return mClazz;
+    }
+
+    private void appendGetterSetter(StringBuilder getterSetter, String name, String type) {
+        if (mGetterSetter) {
+            getterSetter.append("    public void set");
+            getterSetter.append(JsonParser.captureName(name)).append("(");
+            getterSetter.append(type).append(" ").append(name).append(") {\n");
+            getterSetter.append("        this.").append(name).append(" = ");
+            getterSetter.append(name).append(";\n");
+            getterSetter.append("    }\n").append("\n");
+
+            getterSetter.append("    public ").append(type).append(" get");
+            getterSetter.append(JsonParser.captureName(name)).append("() {\n");
+            getterSetter.append("        return this.").append(name).append(";\n");
+            getterSetter.append("    }\n");
+        }
+    }
+
+    private class MyWriteAction implements Runnable {
+
+        private PsiClass psiClass;
+
+        private MyWriteAction(PsiClass psiClass) {
+            this.psiClass = psiClass;
+        }
+
+        @Override
+        public void run() {
+            styleManager.shortenClassReferences(psiClass);
+            fileDirectory.add(psiClass);
+        }
     }
 
     @Override
@@ -94,15 +161,17 @@ class JavaBean {
         private PsiType type;
         private String name;
         private String value;
+        private boolean array;
 
-        private ClassField(PsiType type, String name, String value) {
+        private ClassField(PsiType type, String name, String value, boolean array) {
             this.type = type;
             this.name = name;
             this.value = value;
+            this.array = array;
         }
 
-        private static ClassField newField(PsiType type, String name, String value) {
-            return new ClassField(type, name, value);
+        private static ClassField newField(PsiType type, String name, String value, boolean array) {
+            return new ClassField(type, name, value, array);
         }
 
         @Override
@@ -114,7 +183,8 @@ class JavaBean {
             if (obj instanceof ClassField) {
                 ClassField field = (ClassField) obj;
                 return field.name.equals(name) &&
-                        field.type == type;
+                        field.type == type &&
+                        field.array == array;
             }
 
             return false;

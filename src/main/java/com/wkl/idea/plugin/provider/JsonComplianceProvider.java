@@ -12,7 +12,7 @@ import org.jetbrains.annotations.NotNull;
 public class JsonComplianceProvider extends JsonStandardComplianceProvider {
 
     @Override
-    public boolean isCommentAllowed(@NotNull PsiComment comment) {
+    public boolean isCommentAllowed(@NotNull PsiComment comment) { // 使我们的虚拟 json 文件，支持 注释
         return JsonDialog.FILE_NAME.equals(comment.getContainingFile().getName());
     }
 }

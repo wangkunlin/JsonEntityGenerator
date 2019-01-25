@@ -7,6 +7,7 @@
     <description><![CDATA[
     An Android Studio Plugin to generate java file from json
     ]]></description>
+    <idea-version since-build="162.539"/>
 
     <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
          on how to target different products -->

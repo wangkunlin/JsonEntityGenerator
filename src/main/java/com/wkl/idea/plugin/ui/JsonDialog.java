@@ -36,12 +36,14 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class JsonDialog extends DialogWrapper {
+public class JsonDialog extends DialogWrapper implements ItemListener {
     public static final String FILE_NAME = "JsonViewPlugin.json";
     private JTextField nameInput;
     private Project mProject;
@@ -58,18 +60,23 @@ public class JsonDialog extends DialogWrapper {
     private int mErrorCount = 0;
     private Map<RangeHighlighter, String> mErrorTips = new HashMap<>();
     private PsiDirectory mDir;
+    private JCheckBox mSetterGetter;
+    private boolean mSetterGetterEnabled = false;
 
     public JsonDialog(Project project, PsiDirectory file) {
         super(project);
         mDir = file;
         mProject = project;
+        // 格式化 按钮
         mFormatAction.setEnabled(true);
         mFormatAction.putValue(Action.NAME, "&Format");
 
+        // 创建一个虚拟的 json 文件
         mFile = PsiFileFactory.getInstance(mProject).createFileFromText(FILE_NAME,
                 JsonLanguage.INSTANCE, "");
         VirtualFile mJsonVirtualFile = mFile.getVirtualFile();
         mTextEditorProvider = TextEditorProvider.getInstance();
+        // 获取一个 对应的 文本编辑器
         mEditor = (TextEditor) mTextEditorProvider.createEditor(mProject, mJsonVirtualFile);
         mRealEditor = mEditor.getEditor();
         MarkupModelEx model = (MarkupModelEx) DocumentMarkupModel
@@ -87,7 +94,7 @@ public class JsonDialog extends DialogWrapper {
             }
         });
         EditorSettings settings = mRealEditor.getSettings();
-        if (!settings.isLineNumbersShown()) {
+        if (!settings.isLineNumbersShown()) { // 行号
             settings.setLineNumbersShown(true);
         }
         setTitle("Generate Class From Json");
@@ -100,6 +107,9 @@ public class JsonDialog extends DialogWrapper {
         });
     }
 
+    /**
+     * 计算 编辑器内的错误数量，并把错误记录
+     */
     private void calErrorCount(RangeHighlighter highlighter, int delta) {
         HighlightInfo info = HighlightInfo.fromRangeHighlighter(highlighter);
         if (info == null) {
@@ -117,8 +127,8 @@ public class JsonDialog extends DialogWrapper {
 
     @Override
     protected void doOKAction() {
-        JsonParser jsonParser = new JsonParser(mProject, mDir, nameInput.getText().trim());
-        mFile.accept(new PsiRecursiveElementWalkingVisitor() {
+        JsonParser jsonParser = new JsonParser(mProject, mDir, nameInput.getText().trim(), mSetterGetterEnabled);
+        mFile.accept(new PsiRecursiveElementWalkingVisitor() { // 递归遍历 json
             @Override
             public void visitElement(PsiElement element) {
                 if (element instanceof JsonElement || element instanceof PsiComment) {
@@ -143,11 +153,15 @@ public class JsonDialog extends DialogWrapper {
     private void doFormatAction() {
         ApplicationManager.getApplication().invokeLater(
                 () -> WriteCommandAction.runWriteCommandAction(mProject, () -> {
+                    // 调用 api 格式化 json
                     CodeStyleManager.getInstance(mProject).reformat(mFile, false);
                 })
         );
     }
 
+    /**
+     * 检查错误信息
+     */
     @NotNull
     @Override
     protected List<ValidationInfo> doValidateAll() {
@@ -177,6 +191,7 @@ public class JsonDialog extends DialogWrapper {
 
     @Override
     protected void dispose() {
+        // 释放编辑器
         mTextEditorProvider.disposeEditor(mEditor);
         super.dispose();
     }
@@ -186,13 +201,14 @@ public class JsonDialog extends DialogWrapper {
     protected Action[] createActions() {
         Action okAction = getOKAction();
         Action cancelAction = getCancelAction();
+        // 底部按钮
         return new Action[]{cancelAction, mFormatAction, okAction};
     }
 
     @Nullable
     @Override
-    protected JComponent createNorthPanel() {
-        JPanel panel = new JPanel(new GridLayoutManager(1, 3));
+    protected JComponent createNorthPanel() { // 上放 的控件
+        JPanel panel = new JPanel(new GridLayoutManager(2, 3));
 
         JLabel label = new JLabel("Class Name");
         GridConstraints constraints = new GridConstraints();
@@ -200,9 +216,9 @@ public class JsonDialog extends DialogWrapper {
         constraints.setColumn(0);
         constraints.setRowSpan(1);
         constraints.setColSpan(1);
-        constraints.setVSizePolicy(0);
-        constraints.setHSizePolicy(0);
-        constraints.setFill(0);
+        constraints.setVSizePolicy(GridConstraints.SIZEPOLICY_FIXED);
+        constraints.setHSizePolicy(GridConstraints.SIZEPOLICY_FIXED);
+        constraints.setFill(GridConstraints.FILL_NONE);
         constraints.setIndent(0);
         constraints.setUseParentLayout(false);
         panel.add(label, constraints);
@@ -213,20 +229,36 @@ public class JsonDialog extends DialogWrapper {
         constraints.setColumn(1);
         constraints.setRowSpan(1);
         constraints.setColSpan(2);
-        constraints.setVSizePolicy(0);
-        constraints.setHSizePolicy(6);
-        constraints.setFill(1);
+        constraints.setVSizePolicy(GridConstraints.SIZEPOLICY_FIXED);
+        constraints.setHSizePolicy(GridConstraints.SIZEPOLICY_CAN_GROW | GridConstraints.SIZEPOLICY_WANT_GROW);
+        constraints.setFill(GridConstraints.FILL_HORIZONTAL);
         constraints.setIndent(0);
         constraints.setUseParentLayout(false);
-        Insets margin = JBUI.insets(2, 0);
-        nameInput.setMargin(margin);
         panel.add(nameInput, constraints);
+
+        mSetterGetter = new JCheckBox("Getter and Setter", false);
+        mSetterGetter.addItemListener(this);
+        constraints = new GridConstraints();
+        constraints.setRow(1);
+        constraints.setColumn(1);
+        constraints.setRowSpan(1);
+        constraints.setColSpan(1);
+        constraints.setVSizePolicy(GridConstraints.SIZEPOLICY_FIXED);
+        constraints.setHSizePolicy(GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW);
+        constraints.setAnchor(GridConstraints.ANCHOR_WEST);
+        constraints.setFill(GridConstraints.FILL_NONE);
+        constraints.setIndent(0);
+        constraints.setUseParentLayout(false);
+        Insets margin = JBUI.insets(7, 0);
+        mSetterGetter.setMargin(margin);
+        panel.add(mSetterGetter, constraints);
+
         return panel;
     }
 
     @Nullable
     @Override
-    protected JComponent createCenterPanel() {
+    protected JComponent createCenterPanel() { // 中间的控件
         JPanel panel = new JPanel(new GridLayoutManager(1, 1));
         GridConstraints constraints = new GridConstraints();
         constraints.setUseParentLayout(false);
@@ -238,4 +270,8 @@ public class JsonDialog extends DialogWrapper {
         return panel;
     }
 
+    @Override
+    public void itemStateChanged(ItemEvent e) {
+        mSetterGetterEnabled = mSetterGetter.isSelected();
+    }
 }
