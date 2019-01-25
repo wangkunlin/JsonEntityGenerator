@@ -208,7 +208,10 @@ public class JsonDialog extends DialogWrapper implements ItemListener {
     @Nullable
     @Override
     protected JComponent createNorthPanel() { // 上放 的控件
-        JPanel panel = new JPanel(new GridLayoutManager(2, 3));
+        GridLayoutManager layoutManager = new GridLayoutManager(2, 3);
+        Insets margin = JBUI.insetsBottom(5);
+        layoutManager.setMargin(margin);
+        JPanel panel = new JPanel(layoutManager);
 
         JLabel label = new JLabel("Class Name");
         GridConstraints constraints = new GridConstraints();
@@ -249,8 +252,6 @@ public class JsonDialog extends DialogWrapper implements ItemListener {
         constraints.setFill(GridConstraints.FILL_NONE);
         constraints.setIndent(0);
         constraints.setUseParentLayout(false);
-        Insets margin = JBUI.insets(7, 0);
-        mSetterGetter.setMargin(margin);
         panel.add(mSetterGetter, constraints);
 
         return panel;
